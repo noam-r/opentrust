@@ -4,6 +4,23 @@ theme:
   name: null
   custom_dir: plumbus-theme
 
+plugins:
+  - search: {}
+  - encryptcontent:
+      global_password: !ENV [SITE_PASSWORD, '']
+      title_prefix: ''
+      summary: 'This content is password protected.'
+      placeholder: 'Enter password'
+      password_button: true
+      password_button_text: 'Unlock'
+      decryption_failure_message: 'Incorrect password.'
+      encryption_info_message: 'Contact the author for access.'
+      webcrypto: true
+      remember_password: true
+      kdf_pow: 3
+      encrypted_something:
+        toc: [aside, class]
+
 nav:
   - Home: index.md
   - 1. The Problem: 01-the-problem.md

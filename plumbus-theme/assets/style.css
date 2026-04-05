@@ -597,3 +597,71 @@ a:hover { text-decoration: underline; }
   .pagination-item { max-width: 100%; }
   .pagination-next { margin-left: 0; text-align: left; }
 }
+
+
+/* =====================================================
+   Encrypt content plugin - decrypt form
+   ===================================================== */
+
+#mkdocs-decrypted-content {
+  min-height: 40vh;
+}
+
+#mkdocs-decrypt-form {
+  max-width: 400px;
+  margin: 4rem auto;
+  text-align: center;
+}
+
+#mkdocs-decrypt-form h1 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+#mkdocs-decrypt-form p {
+  font-size: 0.9rem;
+  color: var(--c-muted);
+  margin-bottom: 1.5rem;
+}
+
+#mkdocs-content-password {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 0.875rem;
+  font-family: var(--font);
+  font-size: 0.95rem;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  outline: none;
+  margin-bottom: 0.75rem;
+  transition: border-color 0.15s;
+}
+
+#mkdocs-content-password:focus {
+  border-color: var(--c-accent);
+}
+
+#mkdocs-decrypt-button {
+  display: inline-block;
+  padding: 0.5rem 1.5rem;
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--c-accent);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#mkdocs-decrypt-button:hover {
+  background: var(--c-active);
+}
+
+#mkdocs-decrypt-msg {
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: #dc2626;
+}

@@ -148,32 +148,47 @@
   // We extract the raw source, replace the block with a <div class="mermaid">,
   // then dynamically load Mermaid.js to render it.
 
-  var mermaidBlocks = document.querySelectorAll('code.language-mermaid');
-  if (mermaidBlocks.length > 0) {
+  var mermaidLoaded = false;
+
+  function initMermaid() {
+    var mermaidBlocks = document.querySelectorAll('code.language-mermaid');
+    if (mermaidBlocks.length === 0) return;
+
     mermaidBlocks.forEach(function (code) {
       var source = code.textContent;
       var div = document.createElement('div');
       div.className = 'mermaid';
       div.textContent = source;
 
-      // Replace the outermost wrapper (.highlight > pre, or just pre)
       var wrapper = code.closest('.highlight') || code.closest('pre') || code;
       wrapper.parentNode.replaceChild(div, wrapper);
     });
 
-    // Load Mermaid.js from CDN then initialize
-    var script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
-    script.onload = function () {
-      window.mermaid.initialize({
-        startOnLoad: false,
-        theme: 'neutral',
-        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
-        fontSize: 15,
-      });
+    if (mermaidLoaded && window.mermaid) {
       window.mermaid.run({ querySelector: '.mermaid' });
-    };
-    document.head.appendChild(script);
+    } else if (!mermaidLoaded) {
+      mermaidLoaded = true;
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js';
+      script.onload = function () {
+        window.mermaid.initialize({
+          startOnLoad: false,
+          theme: 'neutral',
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif',
+          fontSize: 15,
+        });
+        window.mermaid.run({ querySelector: '.mermaid' });
+      };
+      document.head.appendChild(script);
+    }
   }
+
+  // Run on initial load (works for unencrypted pages)
+  initMermaid();
+
+  // Re-run after encryptcontent plugin decrypts the page
+  window.addEventListener('encryptcontent_event', function () {
+    initMermaid();
+  });
 
 })();
