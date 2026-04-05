@@ -1,0 +1,16 @@
+site_name: OpenTrust
+site_description: A theoretical framework for transparent, privacy-preserving communal lending funds
+theme:
+  name: null
+  custom_dir: plumbus-theme
+
+nav:
+  - Home: index.md
+  - 1. The Problem: 01-the-problem.md
+  - 2. Core Principles: 02-core-principles.md
+  - 3. The Institutional Model: 03-the-institutional-model.md
+  - 4. Privacy and Transparency: 04-privacy-and-transparency.md
+  - 5. Governance and Decision-Making: 05-governance-and-decision-making.md
+  - 6. Verification and Audit: 06-verification-and-audit.md
+  - 7. Exceptions, Enforcement, and Failure: 07-exceptions-enforcement-and-failure.md
+  - 8. Visualizations: 08-visualization.md

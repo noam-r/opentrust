@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="{{ config.site_description | default('') }}">
+  <title>{% if page and page.title %}{{ page.title }} – {% endif %}{{ config.site_name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;0,8..60,700;1,8..60,400;1,8..60,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ base_url }}/assets/style.css">
+  {% for path in config.extra_css %}
+  <link rel="stylesheet" href="{{ base_url }}/{{ path }}">
+  {% endfor %}
+</head>
+<body>
+
+{%- macro render_nav(items) -%}
+  {%- for item in items -%}
+    {%- if item.children -%}
+    <div class="nav-group{% if item.active %} active{% endif %}">
+      <button class="nav-group-toggle" aria-expanded="{{ 'true' if item.active else 'false' }}">
+        <span>{{ item.title }}</span>
+        <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      <div class="nav-group-items">
+        {{- render_nav(item.children) -}}
+      </div>
+    </div>
+    {%- else -%}
+    <a href="{{ item.url | url }}" class="nav-link{% if item.active %} active{% endif %}">{{ item.title }}</a>
+    {%- endif -%}
+  {%- endfor -%}
+{%- endmacro -%}
+
+<div id="overlay" class="overlay"></div>
+
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-scroll">
+    <div class="sidebar-brand">
+      <a class="brand-link" href="{{ '.' | url }}">{{ config.site_name }}</a>
+    </div>
+    <div class="search-box">
+      <div class="search-input-wrap">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" id="searchInput" class="search-input" placeholder="Search docs…" autocomplete="off" aria-label="Search documentation">
+      </div>
+      <div id="searchResults" class="search-results" hidden></div>
+    </div>
+    <nav class="sidebar-nav" aria-label="Main navigation">
+      {{ render_nav(nav) }}
+    </nav>
+  </div>
+</aside>
+
+<div class="wrapper">
+  <header class="topbar">
+    <button class="menu-btn" id="menuBtn" aria-label="Open navigation" aria-expanded="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <a class="topbar-brand" href="{{ '.' | url }}">{{ config.site_name }}</a>
+  </header>
+
+  <main class="main">
+    <div class="page-grid">
+      <article class="article">
+        {{ page.content }}
+
+        {% if page.previous_page or page.next_page %}
+        <nav class="pagination" aria-label="Page navigation">
+          {% if page.previous_page %}
+          <a href="{{ page.previous_page.url | url }}" class="pagination-item pagination-prev">
+            <span class="pagination-direction">← Previous</span>
+            <span class="pagination-title">{{ page.previous_page.title }}</span>
+          </a>
+          {% else %}<span></span>{% endif %}
+          {% if page.next_page %}
+          <a href="{{ page.next_page.url | url }}" class="pagination-item pagination-next">
+            <span class="pagination-direction">Next →</span>
+            <span class="pagination-title">{{ page.next_page.title }}</span>
+          </a>
+          {% endif %}
+        </nav>
+        {% endif %}
+      </article>
+
+      {% if page.toc %}
+      <aside class="toc" aria-label="Table of contents">
+        <p class="toc-heading">On this page</p>
+        {%- for item in page.toc -%}
+        <a href="{{ item.url }}" class="toc-item">{{ item.title }}</a>
+        {%- for child in item.children -%}
+        <a href="{{ child.url }}" class="toc-item toc-item--sub">{{ child.title }}</a>
+        {%- for grandchild in child.children -%}
+        <a href="{{ grandchild.url }}" class="toc-item toc-item--sub2">{{ grandchild.title }}</a>
+        {%- endfor -%}
+        {%- endfor -%}
+        {%- endfor -%}
+      </aside>
+      {% endif %}
+    </div>
+  </main>
+</div>
+
+<script>var base_url = '{{ base_url }}';</script>
+{% for path in config.extra_javascript %}
+<script src="{{ base_url }}/{{ path }}"></script>
+{% endfor %}
+<script src="{{ base_url }}/assets/script.js"></script>
+</body>
+</html>
