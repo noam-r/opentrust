@@ -1,0 +1,21 @@
+nav:
+  - label: Home
+    path: index
+  - label: 1. The Problem
+    path: 01-the-problem
+  - label: 2. Core Principles
+    path: 02-core-principles
+  - label: 3. The Institutional Model
+    path: 03-the-institutional-model
+  - label: 4. Privacy and Transparency
+    path: 04-privacy-and-transparency
+  - label: 5. Governance and Decision-Making
+    path: 05-governance-and-decision-making
+  - label: 6. Verification and Audit
+    path: 06-verification-and-audit
+  - label: 7. Exceptions, Enforcement, and Failure
+    path: 07-exceptions-enforcement-and-failure
+  - label: 8. Business Model
+    path: 08-business-model
+  - label: 9. Visualizations
+    path: 09-visualization

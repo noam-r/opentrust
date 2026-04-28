@@ -1,0 +1,94 @@
+name: Publish Docs to nrdocs
+
+on:
+  push:
+    branches:
+      - nrdocs
+
+jobs:
+  publish:
+    name: Publish documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build payload and publish
+        env:
+          NRDOCS_API_URL: https://nrdocs-control-plane.nrdocs.workers.dev
+          NRDOCS_DOCS_DIR: ${{ vars.NRDOCS_DOCS_DIR || 'docs' }}
+        run: |
+          set -euo pipefail
+          DOCS_DIR="${NRDOCS_DOCS_DIR:-docs}"
+          API_BASE="${NRDOCS_API_URL%/}"
+
+          # Request a GitHub Actions OIDC token scoped to the Control Plane URL (audience)
+          audience=$(printf '%s' "${API_BASE}" | jq -sRr @uri)
+          oidc_json=$(curl -sSf -H "Authorization: Bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${audience}")
+          oidc_token=$(echo "$oidc_json" | jq -r '.value')
+          if [ -z "$oidc_token" ] || [ "$oidc_token" = "null" ]; then
+            echo "::error::Failed to acquire GitHub OIDC token"
+            exit 1
+          fi
+
+          # Exchange OIDC for short-lived publish credentials (project_id + repo_publish_token)
+          exchange_code=$(curl -s -o exchange.json -w '%{http_code}' -X POST -H "Authorization: Bearer $oidc_token" "${API_BASE}/oidc/publish-credentials")
+          if [ "$exchange_code" -lt 200 ] || [ "$exchange_code" -ge 300 ]; then
+            echo "::error::OIDC exchange failed with HTTP $exchange_code"
+            cat exchange.json || true
+            exit 1
+          fi
+          creds=$(cat exchange.json)
+          NRDOCS_PROJECT_ID=$(echo "$creds" | jq -r '.project_id')
+          NRDOCS_PUBLISH_TOKEN=$(echo "$creds" | jq -r '.repo_publish_token')
+          if [ -z "$NRDOCS_PROJECT_ID" ] || [ "$NRDOCS_PROJECT_ID" = "null" ]; then
+            echo "::error::OIDC exchange did not return project_id"
+            echo "$creds"
+            exit 1
+          fi
+          if [ -z "$NRDOCS_PUBLISH_TOKEN" ] || [ "$NRDOCS_PUBLISH_TOKEN" = "null" ]; then
+            echo "::error::OIDC exchange did not return repo_publish_token"
+            echo "$creds"
+            exit 1
+          fi
+
+          # Build pages map without passing large strings as CLI args.
+          pages_file=$(mktemp)
+          echo '{}' > "$pages_file"
+          while IFS= read -r -d '' file; do
+            relative="${file#"$DOCS_DIR/content/"}"
+            key="${relative%.md}"
+            tmp_pages=$(mktemp)
+            jq --arg k "$key" --rawfile v "$file" '. + {($k): $v}' "$pages_file" > "$tmp_pages"
+            mv "$tmp_pages" "$pages_file"
+          done < <(find "$DOCS_DIR/content" -name '*.md' -type f -print0 | sort -z)
+
+          # Assemble payload (rawfile reads file content directly; no huge argv).
+          payload_file=$(mktemp)
+          if [ -f "$DOCS_DIR/allowed-list.yml" ]; then
+            jq -n               --rawfile project_yml "$DOCS_DIR/project.yml"               --rawfile nav_yml "$DOCS_DIR/nav.yml"               --rawfile allowed_list_yml "$DOCS_DIR/allowed-list.yml"               --slurpfile pages "$pages_file"               '{repo_content: {project_yml: $project_yml, nav_yml: $nav_yml, allowed_list_yml: $allowed_list_yml, pages: $pages[0]}}' > "$payload_file"
+          else
+            jq -n               --rawfile project_yml "$DOCS_DIR/project.yml"               --rawfile nav_yml "$DOCS_DIR/nav.yml"               --slurpfile pages "$pages_file"               '{repo_content: {project_yml: $project_yml, nav_yml: $nav_yml, allowed_list_yml: null, pages: $pages[0]}}' > "$payload_file"
+          fi
+
+          # Publish
+          http_code=$(curl -s -o response.json -w '%{http_code}' \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${NRDOCS_PUBLISH_TOKEN}" \
+            -H "X-Repo-Identity: github.com/${{ github.repository }}" \
+            --data-binary "@$payload_file" \
+            "${API_BASE}/projects/${NRDOCS_PROJECT_ID}/publish")
+
+          echo "Response status: ${http_code}"
+          cat response.json
+
+          if [ "$http_code" -lt 200 ] || [ "$http_code" -ge 300 ]; then
+            echo "::error::Publish failed with HTTP ${http_code}"
+            exit 1
+          fi
+          echo "Publish succeeded."

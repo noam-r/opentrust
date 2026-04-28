@@ -1,0 +1,10 @@
+{
+  "project_id": "390d3fe8-9aa1-455d-bd48-9fdfb379e22f",
+  "api_url": "https://nrdocs-control-plane.nrdocs.workers.dev",
+  "delivery_url": "https://nrdocs.quinovi.com",
+  "org_slug": "default",
+  "slug": "opentrust",
+  "docs_dir": "docs",
+  "publish_branch": "nrdocs",
+  "repo_identity": "github.com/noam-r/opentrust"
+}
