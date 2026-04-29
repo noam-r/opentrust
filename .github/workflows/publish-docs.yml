@@ -4,6 +4,18 @@ on:
   push:
     branches:
       - nrdocs
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "publish | set-password"
+        required: true
+        default: "publish"
+      password:
+        description: "Password to set (mode=set-password). Not stored; avoid pasting into logs."
+        required: false
+      access_mode:
+        description: "Access mode to set (mode=set-access-mode): public | password"
+        required: false
 
 jobs:
   publish:
@@ -21,10 +33,14 @@ jobs:
         env:
           NRDOCS_API_URL: https://nrdocs-control-plane.nrdocs.workers.dev
           NRDOCS_DOCS_DIR: ${{ vars.NRDOCS_DOCS_DIR || 'docs' }}
+          NRDOCS_MODE: ${{ github.event.inputs.mode || 'publish' }}
+          NRDOCS_NEW_PASSWORD: ${{ github.event.inputs.password || '' }}
+          NRDOCS_ACCESS_MODE: ${{ github.event.inputs.access_mode || '' }}
         run: |
           set -euo pipefail
           DOCS_DIR="${NRDOCS_DOCS_DIR:-docs}"
           API_BASE="${NRDOCS_API_URL%/}"
+          MODE="${NRDOCS_MODE:-publish}"
 
           # Request a GitHub Actions OIDC token scoped to the Control Plane URL (audience)
           audience=$(printf '%s' "${API_BASE}" | jq -sRr @uri)
@@ -33,6 +49,36 @@ jobs:
           if [ -z "$oidc_token" ] || [ "$oidc_token" = "null" ]; then
             echo "::error::Failed to acquire GitHub OIDC token"
             exit 1
+          fi
+
+          # Repo-proof challenge verification (password management without gh)
+          # If a challenge file is present in the commit, verify it and exit without publishing.
+          if ls ".nrdocs/challenges/"*.json >/dev/null 2>&1; then
+            for f in .nrdocs/challenges/*.json; do
+              challenge_id=$(basename "$f" .json)
+              public_token=$(jq -r '.public_token' "$f")
+              repo_identity=$(jq -r '.repo_identity' "$f")
+              if [ -z "$public_token" ] || [ "$public_token" = "null" ] || [ -z "$repo_identity" ] || [ "$repo_identity" = "null" ]; then
+                echo "::error::Invalid challenge file: $f"
+                exit 1
+              fi
+              verify_payload=$(mktemp)
+              jq -n                 --arg repo_identity "$repo_identity"                 --arg ref "${GITHUB_REF}"                 --arg sha "${GITHUB_SHA}"                 --arg public_token "$public_token"                 '{repo_identity: $repo_identity, ref: $ref, sha: $sha, public_token: $public_token}' > "$verify_payload"
+              vcode=$(curl -s -o verify_response.json -w '%{http_code}' \
+                -X POST \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Bearer $oidc_token" \
+                --data-binary "@$verify_payload" \
+                "${API_BASE}/repo-proof/challenges/${challenge_id}/verify")
+              echo "Challenge verify status: ${vcode}"
+              cat verify_response.json
+              if [ "$vcode" -lt 200 ] || [ "$vcode" -ge 300 ]; then
+                echo "::error::Challenge verification failed for ${challenge_id}"
+                exit 1
+              fi
+            done
+            echo "Challenge(s) verified. Skipping publish."
+            exit 0
           fi
 
           # Exchange OIDC for short-lived publish credentials (project_id + repo_publish_token)
@@ -54,6 +100,59 @@ jobs:
             echo "::error::OIDC exchange did not return repo_publish_token"
             echo "$creds"
             exit 1
+          fi
+
+          # Password rotation mode (repo owner initiated, no stored secrets)
+          if [ "$MODE" = "set-password" ]; then
+            if [ -z "${NRDOCS_NEW_PASSWORD:-}" ]; then
+              echo "::error::Missing workflow input: password"
+              exit 1
+            fi
+            echo "::add-mask::${NRDOCS_NEW_PASSWORD}"
+            pw_payload=$(mktemp)
+            jq -n --arg password "${NRDOCS_NEW_PASSWORD}" '{password: $password}' > "$pw_payload"
+            pw_code=$(curl -s -o pw_response.json -w '%{http_code}' \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${NRDOCS_PUBLISH_TOKEN}" \
+              --data-binary "@$pw_payload" \
+              "${API_BASE}/projects/${NRDOCS_PROJECT_ID}/password")
+            echo "Response status: ${pw_code}"
+            cat pw_response.json
+            if [ "$pw_code" -lt 200 ] || [ "$pw_code" -ge 300 ]; then
+              echo "::error::Set password failed with HTTP ${pw_code}"
+              exit 1
+            fi
+            echo "Password updated."
+            exit 0
+          fi
+
+          # Access-mode change (repo owner initiated, no stored secrets)
+          if [ "$MODE" = "set-access-mode" ]; then
+            if [ -z "${NRDOCS_ACCESS_MODE:-}" ]; then
+              echo "::error::Missing workflow input: access_mode"
+              exit 1
+            fi
+            if [ "${NRDOCS_ACCESS_MODE}" != "public" ] && [ "${NRDOCS_ACCESS_MODE}" != "password" ]; then
+              echo "::error::Invalid access_mode (expected public|password)"
+              exit 1
+            fi
+            am_payload=$(mktemp)
+            jq -n --arg access_mode "${NRDOCS_ACCESS_MODE}" '{access_mode: $access_mode}' > "$am_payload"
+            am_code=$(curl -s -o am_response.json -w '%{http_code}' \
+              -X POST \
+              -H "Content-Type: application/json" \
+              -H "Authorization: Bearer ${NRDOCS_PUBLISH_TOKEN}" \
+              --data-binary "@$am_payload" \
+              "${API_BASE}/projects/${NRDOCS_PROJECT_ID}/access-mode")
+            echo "Response status: ${am_code}"
+            cat am_response.json
+            if [ "$am_code" -lt 200 ] || [ "$am_code" -ge 300 ]; then
+              echo "::error::Set access mode failed with HTTP ${am_code}"
+              exit 1
+            fi
+            echo "Access mode updated."
+            exit 0
           fi
 
           # Build pages map without passing large strings as CLI args.
