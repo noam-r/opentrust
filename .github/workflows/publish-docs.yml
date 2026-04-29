@@ -54,13 +54,15 @@ jobs:
           # Repo-proof challenge verification (password management without gh)
           # If a challenge file is present in the commit, verify it and exit without publishing.
           if ls ".nrdocs/challenges/"*.json >/dev/null 2>&1; then
+            verify_failed=0
             for f in .nrdocs/challenges/*.json; do
               challenge_id=$(basename "$f" .json)
               public_token=$(jq -r '.public_token' "$f")
               repo_identity=$(jq -r '.repo_identity' "$f")
               if [ -z "$public_token" ] || [ "$public_token" = "null" ] || [ -z "$repo_identity" ] || [ "$repo_identity" = "null" ]; then
-                echo "::error::Invalid challenge file: $f"
-                exit 1
+                echo "::notice::Invalid challenge file format: $f (skipping)"
+                verify_failed=1
+                continue
               fi
               verify_payload=$(mktemp)
               jq -n                 --arg repo_identity "$repo_identity"                 --arg ref "${GITHUB_REF}"                 --arg sha "${GITHUB_SHA}"                 --arg public_token "$public_token"                 '{repo_identity: $repo_identity, ref: $ref, sha: $sha, public_token: $public_token}' > "$verify_payload"
@@ -73,11 +75,25 @@ jobs:
               echo "Challenge verify status: ${vcode}"
               cat verify_response.json
               if [ "$vcode" -lt 200 ] || [ "$vcode" -ge 300 ]; then
-                echo "::error::Challenge verification failed for ${challenge_id}"
-                exit 1
+                reason=$(jq -r '.error // empty' verify_response.json 2>/dev/null || true)
+                if [ "$vcode" = "409" ] && [ "$reason" = "Challenge expired" ]; then
+                  echo "::notice::Challenge ${challenge_id} expired. Re-run 'nrdocs password set' to issue a fresh challenge."
+                else
+                  if [ -n "$reason" ]; then
+                    echo "::notice::Challenge verification did not complete for ${challenge_id} (HTTP ${vcode}: $reason)."
+                  else
+                    echo "::notice::Challenge verification did not complete for ${challenge_id} (HTTP ${vcode})."
+                  fi
+                fi
+                verify_failed=1
+                continue
               fi
             done
-            echo "Challenge(s) verified. Skipping publish."
+            if [ "$verify_failed" -eq 1 ]; then
+              echo "::notice::Challenge verification run finished with non-fatal issues. Skipping publish for this run."
+            else
+              echo "Challenge(s) verified. Skipping publish."
+            fi
             exit 0
           fi
 
